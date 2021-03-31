@@ -1,19 +1,21 @@
-#include <Arduino.h>
-
-#include <SPI.h>
-//#include <EEPROM.h>
-
-#include <Wire.h>
-
-#include <stdint.h>
-
+#include "RFM69registers.h"
 #include "DavisRFM69.h"
 #include "PacketFifo.h"
+#include "SerialCommand.h"
 
-#define LED 13
-#define SERIAL_BAUD 19200
+#include <Arduino.h>
+#include <SPI.h>
 
-DavisRFM69 radio(8, 3, true, 3);
+
+#define SLAVESELECTPIN  8
+#define INTERRUPTPIN    3
+#define INTERRUPTNUM    3
+#define ISRFM69HW       1
+
+#define LED           LED_BUILTIN
+#define SERIAL_BAUD   115200
+
+DavisRFM69 radio(SLAVESELECTPIN, INTERRUPTPIN, ISRFM69HW, INTERRUPTNUM);
 
 // id, type, active
 Station stations[1] = {
@@ -24,47 +26,25 @@ Station stations[1] = {
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
-  delay(1000);
-  
-  pinMode(LED, OUTPUT); 
+
+  pinMode(LED, OUTPUT);
   digitalWrite(LED, LOW);
-  
+
   radio.setStations(stations, 1);
-  radio.initialize(FREQ_BAND_US);
-  //radio.setBandwidth(RF69_DAVIS_BW_NARROW);
+  radio.initialize(FREQ_BAND_EU);
   radio.setBandwidth(RF69_DAVIS_BW_WIDE);
-  
+
   Serial.println("Boot complete!");
 }
 
 
 void loop() {
 
-/*
- static uint32_t last_print = 0;
-
-  if (millis() - last_print > 1000){
-    // print performance DC stats
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < COUNT_RF69_MODES; i++){
-      sum += radio.rfm69_mode_counts[i];
-    }
-    for (uint8_t i = 0; i < COUNT_RF69_MODES; i++){
-      Serial.print(RFM69_MODE_STRINGS[i]);
-      Serial.print(": ");
-      Serial.print(radio.rfm69_mode_counts[i]);
-      Serial.print(" ");
-      Serial.print(radio.rfm69_mode_counts[i]/ (sum / 100.0));
-      Serial.println("\%");      
-    }
-
-    last_print = millis(); 
-  }
-*/
   if (radio.fifo.hasElements()) {
     decode_packet(radio.fifo.dequeue());
   }
 
+/*
   if (radio.mode == SM_RECEIVING) {
     digitalWrite(LED, HIGH);
   } else if (radio.mode == SM_SEARCHING){
@@ -75,9 +55,8 @@ void loop() {
   }else{
     digitalWrite(LED, LOW);
   }
-
+*/
   radio.loop();
-    
 }
 
 void Blink(byte PIN, int DELAY_MS)
@@ -114,12 +93,11 @@ void decode_packet(RadioData* rd) {
   // https://github.com/dekay/DavisRFM69/wiki/Message-Protocol
   int val;
   byte* packet = rd->packet;
-
+/*
   Serial.print(F("raw:"));
   printHex(packet, 10);
   Serial.print(F(", "));
   print_value("station", packet[0] & 0x7, F(", "));
-  
 
   Serial.print(F("packets:"));
   Serial.print(radio.packets);
@@ -130,6 +108,8 @@ void decode_packet(RadioData* rd) {
   Serial.print(F(", "));
 
   print_value("channel", rd->channel, F(", "));
+ */
+
   print_value("rssi", -rd->rssi, F(", "));
 
   print_value("batt", (char*)(packet[0] & 0x8 ? "err" : "ok"), F(", "));
@@ -210,7 +190,7 @@ void decode_packet(RadioData* rd) {
 
     case VP2P_HUMIDITY:
       val = ((packet[4] >> 4) << 8 | packet[3]) / 10; // 0 -> no sensor
-      print_value("rh", (float)val, F(", "));
+      print_value("hum", (float)val, F(", "));
       break;
 
     case VP2P_WINDGUST:
@@ -227,8 +207,8 @@ void decode_packet(RadioData* rd) {
       print_value("soilleaf", -1, F(", "));
       break;
 
-    case VUEP_VCAP:           
-      val = (packet[3] << 2) | (packet[4] & 0xc0) >> 6;    
+    case VUEP_VCAP:
+      val = (packet[3] << 2) | (packet[4] & 0xc0) >> 6;
       print_value("vcap", (float)(val / 100.0), F(", "));
       break;
 
@@ -236,10 +216,10 @@ void decode_packet(RadioData* rd) {
       val = (packet[3] << 2) | (packet[4] & 0xc0) >> 6;
       print_value("vsolar", (float)(val / 100.0), F(", "));
   }
-
+/*
   print_value("fei", round(rd->fei * RF69_FSTEP / 1000), F(", "));
   print_value("delta", rd->delta, F(""));
-
+*/
   Serial.println();
 }
 
