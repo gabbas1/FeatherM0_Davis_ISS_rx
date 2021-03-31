@@ -65,12 +65,12 @@ static const __attribute__((progmem)) char RFM69_MODE_STRINGS[COUNT_RF69_MODES][
 #define COURSE_TEMP_COEF    -90 // puts the temperature reading in the ballpark, user can fine tune the returned value
 #define RF69_FSTEP 61.03515625 	// == FXOSC/2^19 = 32mhz/2^19 (p13 in DS)
 
-#define RESYNC_THRESHOLD 50       // max. number of lost packets from a station before rediscovery
+#define RESYNC_THRESHOLD 20       // max. number of lost packets from a station before rediscovery
 #define LATE_PACKET_THRESH 5000   // packet is considered missing after this many micros
 #define POST_RX_WAIT 2000         // RX "settle" delay
 #define MAX_STATIONS 8            // max. stations this code is able to handle
 
-#define TUNEIN_USEC		10000L 	// 10 milliseconds, amount of time before an expect TX to tune the radio in.									
+#define TUNEIN_USEC		10000L 	// 10 milliseconds, amount of time before an expect TX to tune the radio in.
 									// this includes possible radio turnaround tx->rx or sleep->rx transitions
 									// 10 ms is reliable, should be able to get this faster but
 									// the loop is polled, so slow loop calls will cause missed packets
@@ -80,7 +80,7 @@ static const __attribute__((progmem)) char RFM69_MODE_STRINGS[COUNT_RF69_MODES][
 #define DISCOVERY_STEP   150000000L	// 150 seconds
 
 /** DavisRFM69 state machine modes */
-enum sm_mode {	
+enum sm_mode {
 	SM_IDLE = 0,  				// no stations configured
 	SM_SEARCHING = 1, 			// searching for station(s)
 	SM_SYNCHRONIZED = 2, 		// in sync with all stations
@@ -91,11 +91,11 @@ enum sm_mode {
 typedef struct __attribute__((packed)) Station {
   byte id;                	// station ID (set with the DIP switch on original equipment)
                           	// set it ONE LESS than advertised station id, eg. 0 for station 1 (default) etc.
-  byte type;              	// STYPE_XXX station type, eg. ISS, standalone anemometer transmitter, etc. 
+  byte type;              	// STYPE_XXX station type, eg. ISS, standalone anemometer transmitter, etc.
   bool active;            	// true when the station is actively listened and will queue packets
   byte repeaterId;        	// repeater id when packet is coming via a repeater, otherwise 0
                           	// repeater IDs A..H are stored as 0x8..0xf here
-  
+
   uint32_t lastRx;   	 	// last time a packet is seen or should have been seen when missed
   uint32_t lastSeen; 	 	// last factual reception time
   uint32_t interval;    	// packet transmit interval for the station: (41 + id) / 16 * 1M microsecs
@@ -134,7 +134,7 @@ class DavisRFM69 {
 
 	volatile uint32_t rfm69_mode_timer;
 	volatile uint32_t rfm69_mode_counts[COUNT_RF69_MODES];
-	
+
 
 	static PacketFifo fifo;
 	static Station *stations;
@@ -189,7 +189,7 @@ class DavisRFM69 {
 	void nextStation();
 
 	static void handleTimerInt();
-	
+
 	static void setStations(Station *_stations, byte n);
 	void stopReceiver();
 	void setRssiThreshold(int rssiThreshold);
