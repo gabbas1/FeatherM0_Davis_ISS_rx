@@ -6,7 +6,6 @@
 #include <Arduino.h>
 #include <SPI.h>
 
-
 #define SLAVESELECTPIN  8
 #define INTERRUPTPIN    3
 #define INTERRUPTNUM    3
@@ -97,8 +96,8 @@ void decode_packet(RadioData* rd) {
   Serial.print(F("raw:"));
   printHex(packet, 10);
   Serial.print(F(", "));
-  print_value("station", packet[0] & 0x7, F(", "));
 
+  print_value("station", packet[0] & 0x7, F(", "));
   Serial.print(F("packets:"));
   Serial.print(radio.packets);
   Serial.print('/');
@@ -112,7 +111,7 @@ void decode_packet(RadioData* rd) {
 
   print_value("rssi", -rd->rssi, F(", "));
 
-  print_value("batt", (char*)(packet[0] & 0x8 ? "err" : "ok"), F(", "));
+  print_value("batt", (char*)(packet[0] & 0x8 ? "0" : "1"), F(", "));
 
   // All packet payload values are printed unconditionally, either properly
   // calculated or flagged with a special "missing sensor" value, mostly -1.
@@ -120,6 +119,12 @@ void decode_packet(RadioData* rd) {
 
   byte id = radio.DATA[0] & 7;
   int stIx = radio.findStation(id);
+
+  int mph = (int16_t)packet[3];
+  float ms = (float)(mph * 0.44704);
+
+  float rainrate = 0;
+
 
   // wind data is present in every packet, windd == 0 (packet[2] == 0) means there's no anemometer
   if (packet[2] != 0) {
@@ -132,9 +137,11 @@ void decode_packet(RadioData* rd) {
   } else {
     val = 0;
   }
-  print_value("windv", packet[1], F(", "));
-  print_value("winddraw", packet[2], F(", "));
-  print_value("windd", val, F(", "));
+
+  float speed_ms = (float)(packet[1] * 0.44704);
+  print_value("speed", speed_ms, F(", "));
+  //print_value("winddraw", packet[2], F(", "));
+  print_value("deg", val, F(", "));
 
   switch (packet[0] >> 4) {
 
@@ -150,9 +157,9 @@ void decode_packet(RadioData* rd) {
     case VP2P_SOLAR:
       val = word(packet[3], packet[4]) >> 6;
       if (val < 0x3fe) {
-        print_value("solar", (float)(val * 1.757936), F(", "));
+        print_value("solar_ir", (float)(val * 1.757936), F(", "));
       } else {
-        print_value("solar", -1, F(", "));
+        print_value("solar_ir", -1, F(", "));
       }
       break;
 
@@ -169,11 +176,34 @@ void decode_packet(RadioData* rd) {
       // strong rain: byte4[5:4] as value[5:4] and byte3[7:4] as value[3:0] - 6 bits total
       val = (packet[4] & 0x30) << 4 | packet[3];
       if (val == 0x3ff) {
-        print_value("rainsecs", -1, F(", "));
+        //print_value("rainsecs", -1, F(", "));
+        rainrate = 0;
+        print_value("rainrate", rainrate, F(", "));
       } else {
-        if ((packet[4] & 0x40) == 0) val >>= 4; // packet[4] bit 6: strong == 0, light == 1
-        print_value("rainsecs", val, F(", "));
+        if ((packet[4] & 0x40) == 0){
+          rainrate = 720.0 / (((packet[4] && 0x30) / 16.0 * 250.0) + packet[3]);
+          val >>= 4; // packet[4] bit 6: strong == 0, light == 1
+        } else {
+          rainrate = 11520.0 / (((packet[4] && 0x30) / 16.0 * 250.0) + packet[3]);
+        }
+        //print_value("rainsecs", val, F(", "));
+        print_value("rainrate", rainrate, F(", "));
       }
+
+/*
+      if (packet[3] == 0xFF) {
+        print_value("rainsecs_test", -1, F(", "));
+      } else {
+        if (packet[4] == 0x40) { // means strong rain
+          rainsec_test = (((packet[4] && 0x30) / 16 * 250) + packet[3]) / 16;
+          rainrate_test = 11520.0 / (((packet[4] && 0x30) / 16.0 * 250.0) + packet[3]);
+        } else { // if ligth rain
+          rainsec_test = (((packet[4] && 0x30) / 16 * 250) + packet[3]);
+          rainrate_test = 720.0 / (((packet[4] && 0x30) / 16.0 * 250.0) + packet[3]);
+        }
+      }
+*/
+
       break;
 
     case VP2P_TEMP:
@@ -184,7 +214,10 @@ void decode_packet(RadioData* rd) {
         //val = (int)packet[3] << 4 | packet[4] >> 4;
         //val = (packet[3]* 256 + packet[4]) / 160;
         val = ((int16_t)((packet[3]<<8) | packet[4])) / 16;
-        print_value("temp", (float)(val / 10.0), F(", "));
+        /* °F to °C */
+        float celsius = ((val / 10.0) - 32.0) / 1.80;
+        //print_value("fahrenheit", (float)(val / 10.0), F(", "));
+        print_value("temp", (float)celsius, F(", "));
       }
       break;
 
@@ -194,11 +227,16 @@ void decode_packet(RadioData* rd) {
       break;
 
     case VP2P_WINDGUST:
-      print_value("windgust", packet[3], F(", "));
+
+      //print_value("windgust_mph", mph, F(", "));
+      print_value("windgust", (float)ms, F(", "));
+
+      /*
       // gustref is the index of the last message 9 packet containing the gust (max wind speed).
       if (packet[3] != 0) {
         print_value("gustref", packet[5] & 0xf0 >> 4, F(", "));
       }
+      */
       break;
 
     case VP2P_SOIL_LEAF:
@@ -214,7 +252,7 @@ void decode_packet(RadioData* rd) {
 
     case VUEP_VSOLAR:
       val = (packet[3] << 2) | (packet[4] & 0xc0) >> 6;
-      print_value("vsolar", (float)(val / 100.0), F(", "));
+      print_value("solar_ir", (float)(val / 100.0), F(", "));
   }
 /*
   print_value("fei", round(rd->fei * RF69_FSTEP / 1000), F(", "));
